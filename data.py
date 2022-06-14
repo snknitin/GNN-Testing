@@ -8,6 +8,8 @@ from torch_geometric.data import HeteroData
 from torch_geometric.loader import DataLoader
 from torch_geometric.loader import LinkNeighborLoader
 
+import transform as tnf
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class YearlyData(InMemoryDataset):
@@ -128,20 +130,24 @@ class DailyData(Dataset):
 
 if __name__ == '__main__':
     root = osp.join(os.getcwd(), "dailyroot")
-    data1 = DailyData(root)
-
+    data = DailyData(root)
+    d1 = data[0]
+    norm_data = tnf.edge_norm_fn(data)
+    nd1 = norm_data[0]
     root = osp.join(os.getcwd(), "yearlyroot")
-    data = YearlyData(root)[0] # need to remove the [0] for loaders
+    data1 = YearlyData(root)[0] # need to remove the [0] for loaders
 
     #data.to(device)
-    # data1.to(device) # this doesn't work
+    # data1.to(device) # this doesn't work for daily
+    print(data)
 
-    idxs= list(data.edge_index_dict.items())
-    #loader = DataLoader(data, batch_size=4)
-    loader = LinkNeighborLoader(data,
-                                num_neighbors={key: [30] * 2 for key in data.edge_types},
-                                edge_label_index=[data.edge_types[0],data[data.edge_types[0]].edge_index],
-                                edge_label=data[data.edge_types[0]].edge_label,
-                                batch_size=1024)
-    sampled_hetero_data = next(iter(loader))
-    print(sampled_hetero_data)
+
+    # idxs= list(data.edge_index_dict.items())
+    # #loader = DataLoader(data, batch_size=4)
+    # loader = LinkNeighborLoader(data,
+    #                             num_neighbors={key: [30] * 2 for key in data.edge_types},
+    #                             edge_label_index=[data.edge_types[0],data[data.edge_types[0]].edge_index],
+    #                             edge_label=data[data.edge_types[0]].edge_label,
+    #                             batch_size=1024)
+    # sampled_hetero_data = next(iter(loader))
+    # print(sampled_hetero_data)
