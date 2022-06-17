@@ -10,8 +10,8 @@ from torch_geometric.data.datapipes import functional_transform
 from torch_geometric.transforms import BaseTransform
 
 
-@functional_transform('normalize_edges')
-class NormalizeEdges(BaseTransform):
+@functional_transform('scale_edges')
+class ScaleEdges(BaseTransform):
     r"""Row-normalizes the attributes given in :obj:`attrs` to sum-up to one
     (functional name: :obj:`normalize_features`).
 
@@ -19,15 +19,20 @@ class NormalizeEdges(BaseTransform):
         attrs (List[str]): The names of attributes to normalize.
             (default: :obj:`["x"]`)
     """
-    def __init__(self, attrs: List[str] = ["x"]):
+    def __init__(self, stats, attrs: List[str] = ["edge_attr"]):
+        self.stats = stats
         self.attrs = attrs
 
     def __call__(self, data: Union[Data, HeteroData]):
-        for store in data.stores:
+        for edge,store in list(zip(data.edge_types,data.edge_stores)):
+            edge_stats = self.stats[edge]
             for key, value in store.items(*self.attrs):
                 value = value - value.min()
-                value.div_(value.sum(dim=-1, keepdim=True).clamp_(min=1.))
-                store[key] = value
+                xmean = edge_stats["mean"]
+                xstd = edge_stats["std"]
+                xmin, xmax = edge_stats["min"], edge_stats["max"]
+                #value.div_(value.sum(dim=-1, keepdim=True).clamp_(min=1.))
+                store[key] = (value-xmean).div(xmax-xmin)
         return data
 
     def __repr__(self) -> str:
