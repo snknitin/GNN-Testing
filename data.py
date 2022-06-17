@@ -9,8 +9,14 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.loader import LinkNeighborLoader
 
 import transform as tnf
+import torch_geometric.transforms as T
+import random
+import shutil
+random.seed(42)
+torch.manual_seed(3407)
+np.random.seed(0)
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class YearlyData(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
@@ -130,12 +136,27 @@ class DailyData(Dataset):
 
 if __name__ == '__main__':
     root = osp.join(os.getcwd(), "dailyroot")
+    #transform = T.Compose([T.ToUndirected(), T.AddSelfLoops(), T.NormalizeFeatures(attrs=["x","edge_attr"])])
+
+
     data = DailyData(root)
-    d1 = data[0]
-    norm_data = tnf.edge_norm_fn(data)
-    nd1 = norm_data[0]
-    root = osp.join(os.getcwd(), "yearlyroot")
-    data1 = YearlyData(root)[0] # need to remove the [0] for loaders
+    edge_stats = tnf.getfullstats(data)
+    del data
+    shutil.rmtree(os.path.join(root,'processed'))
+    transform1 = T.Compose([T.NormalizeFeatures(attrs=["x", "edge_attr"])])
+    transform1_5 = T.Compose([tnf.ScaleEdges(stats=edge_stats)])
+    transform2 = T.Compose([T.NormalizeFeatures(attrs=["x", "edge_attr"]), T.ToUndirected(), T.AddSelfLoops()])
+    transform3 = T.Compose([tnf.ScaleEdges(stats=edge_stats, attrs=["edge_attr"]), T.ToUndirected(), T.AddSelfLoops(),T.NormalizeFeatures(attrs=["x", "edge_attr"])])
+    pre_tran = T.Compose([T.ToUndirected(), T.AddSelfLoops()])
+
+    data = DailyData(root,transform=transform3)
+
+    nd1 = data[0]
+    print(nd1)
+    print(nd1[nd1.edge_types[2]].edge_attr[0])
+    print(nd1["node1"].x[0])
+    # root = osp.join(os.getcwd(), "yearlyroot")
+    # data1 = YearlyData(root)[0] # need to remove the [0] for loaders
 
     #data.to(device)
     # data1.to(device) # this doesn't work for daily
