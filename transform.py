@@ -9,6 +9,30 @@ from torch_geometric.data import Data, HeteroData
 from torch_geometric.data.datapipes import functional_transform
 from torch_geometric.transforms import BaseTransform
 
+from data import DailyData
+
+
+@functional_transform('revlabel_delete')
+class RevDelete(BaseTransform):
+    r"""Row-normalizes the attributes given in :obj:`attrs` to sum-up to one
+    (functional name: :obj:`normalize_features`).
+    Args:
+        attrs (List[str]): The names of attributes to normalize.
+            (default: :obj:`["x"]`)
+    """
+    def __init__(self, attrs: List[str] = ["edge_attr"]):
+        self.attrs = attrs
+
+    def __call__(self, data: Union[Data, HeteroData]):
+        for edge,store in list(zip(data.edge_types,data.edge_stores)):
+            if edge[1].startswith("rev"):
+                if "edge_label" in store.keys():
+                    del store["edge_label"]
+        return data
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}()'
+
 
 @functional_transform('scale_edges')
 class ScaleEdges(BaseTransform):
@@ -70,3 +94,28 @@ def edge_norm_fn(data):
             x = data[i][edge].edge_attr
             data[i][edge].edge_attr = (x-xmean)/(xmax-xmin)
     return data
+
+def load_graph_data(root_dir, mode, transform_list):
+    """"""
+    print("Loading data into {}".format(root_dir))
+
+    if transform_list is None:
+        transform_list = T.Compose([
+            T.ToUndirected(),
+            T.AddSelfLoops(),
+            T.NormalizeFeatures(attrs=["x", "edge_attr"]),
+            RevDelete()
+        ])
+    if mode is None:mode="Net-Qty"
+    dailydata =  DailyData(root_dir, mode,
+                           transform = transform_list
+                           )
+
+    # Train test split of 80:10:10
+
+    n = (len(dailydata) + 9) // 10
+    train_data = dailydata[:-2*n]
+    val_data = dailydata[-2*n: -n]
+    test_data = dailydata[-n:]
+
+    return train_data,val_data,test_data

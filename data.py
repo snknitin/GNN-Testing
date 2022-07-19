@@ -2,9 +2,10 @@ import torch
 import os
 import os.path as osp
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 from torch_geometric.data import InMemoryDataset,Dataset, download_url
 from torch_geometric.data import HeteroData
-
+import pandas as pd
 from torch_geometric.loader import DataLoader
 from torch_geometric.loader import LinkNeighborLoader
 
@@ -22,6 +23,7 @@ class YearlyData(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[0])
+
 
     @property
     def raw_file_names(self):
@@ -76,10 +78,17 @@ class YearlyData(InMemoryDataset):
 class DailyData(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
+        self.root = root
+
+    @property
+    def raw_dir(self):
+        return os.path.join(self.root,'raw')
 
     @property
     def raw_file_names(self):
-        return ['some_file_1', 'some_file_2']
+        edge_dir = os.path.join(self.raw_dir,"relations")
+        files = sorted(os.listdir(edge_dir))
+        return [os.path.join(edge_dir,f) for f in files]
 
     @property
     def processed_file_names(self):
@@ -88,12 +97,82 @@ class DailyData(Dataset):
     def download(self):
         # Download to `self.raw_dir`.
         ...
+
+    def get_scalers(self):
+        """
+        Scaling the edge attributed based on the whole data for consistency
+        we need to return scaler and perform the transform
+        """
+
+        def f(i):
+            return pd.read_csv(i, low_memory=True)
+
+        # Read edge_cols from all raw files
+        df = pd.concat(map(f, self.raw_file_names))
+        scaler = MinMaxScaler()
+        scaler.fit(df)
+        del df
+        return scaler
+
+
+    def load_full_node_csv(self, featpath, idxpath):
+        """
+        This will return a matrix / 2d array of the shape
+        [Number of Nodes, Node Feature size]
+        """
+        df = pd.read_csv(featpath)
+        map_df = pd.read_csv(idxpath)
+        mapping = dict(zip(map_df["ent_name"], map_df["ent_idx"]))
+        x = torch.tensor(df.values, dtype=torch.float)
+        return x, mapping
+
+    def load_edge_csv(self, edge_file_path, edge_cols, src_index_col, src_mapping,
+                      dst_index_col, dst_mapping, encoders=None):
+        """
+        This will return a matrix / 2d array of the shape
+        [Number of edges, Edge Feature size]
+        """
+        df = pd.read_csv(edge_file_path)
+        # src = [src_mapping[index] for index in df[src_index_col]]
+        # dst = [dst_mapping[index] for index in df[dst_index_col]]
+        src = []
+        dst = []
+        for index, row in df.iterrows():
+            try:
+                s = src_mapping[row[src_index_col]]
+                d = dst_mapping[row[dst_index_col]]
+            except:
+                df.drop(index, inplace=True)
+                # print("Missed a key")
+                continue
+            src.append(s)
+            dst.append(d)
+
+        # Updates edge indices for dailygraph based on node index to extract
+        edge_index, src_extract, dst_extract = self.get_new_ids(src, dst)
+
+        edge_attr = df[edge_cols]
+        edge_attr = torch.tensor(edge_attr.values, dtype=torch.float)
+
+        edge_label = None
+        if encoders is not None:
+            edge_label = [encoder(df[col]) for col, encoder in encoders.items()]
+            edge_label = torch.cat(edge_label, dim=-1)
+
+        return src_extract, dst_extract, edge_index, edge_attr, edge_label
+
     def get_edges(self, x, y):
         src = np.random.randint(0, x, 350)
         dest = np.random.randint(0, y, 350)
         return [src, dest]
 
     def process(self):
+        node_dir = osp.join(self.raw_dir, "node-features/")
+        edge_dir = os.path.join(self.raw_dir, 'relations/')
+
+        edge2to1scaler = self.get_scalers()
+        edge3to2scaler = self.get_scalers()
+
         idx = 0
         for _ in range(30):
             # Read data from `raw_path`.
