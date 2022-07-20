@@ -8,6 +8,7 @@ from torch_geometric.data import HeteroData
 import pandas as pd
 from torch_geometric.loader import DataLoader
 from torch_geometric.loader import LinkNeighborLoader
+from tqdm import tqdm
 
 import transform as tnf
 import torch_geometric.transforms as T
@@ -18,6 +19,13 @@ torch.manual_seed(3407)
 np.random.seed(0)
 
 #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+class IdentityEncoder(object):
+    def __init__(self, dtype=None):
+        self.dtype = dtype
+
+    def __call__(self, df):
+        return torch.from_numpy(df.values).view(-1, 1).to(self.dtype)
 
 class YearlyData(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
@@ -98,14 +106,15 @@ class DailyData(Dataset):
         # Download to `self.raw_dir`.
         ...
 
-    def get_scalers(self):
+
+    def get_scalers(self,edge_cols):
         """
         Scaling the edge attributed based on the whole data for consistency
         we need to return scaler and perform the transform
         """
 
         def f(i):
-            return pd.read_csv(i, low_memory=True)
+            return pd.read_csv(i, usecols=edge_cols, low_memory=True)
 
         # Read edge_cols from all raw files
         df = pd.concat(map(f, self.raw_file_names))
@@ -120,11 +129,36 @@ class DailyData(Dataset):
         This will return a matrix / 2d array of the shape
         [Number of Nodes, Node Feature size]
         """
-        df = pd.read_csv(featpath)
-        map_df = pd.read_csv(idxpath)
-        mapping = dict(zip(map_df["ent_name"], map_df["ent_idx"]))
+        node_dir = osp.join(self.raw_dir, "node-features/")
+        df = pd.read_csv(os.path.join(node_dir,featpath),header=None)
+        map_df = pd.read_csv(os.path.join(node_dir,idxpath))
+        mapping = dict(zip(map_df["name"], map_df["index"]))
         x = torch.tensor(df.values, dtype=torch.float)
         return x, mapping
+
+    def get_new_ids(self, src, dst):
+        """
+        Converting the fulldata index mapping into daily index
+        This will require only a subset of nodes from the full files
+        Based on that subset, the index mapping of each edge will change to suit it
+        """
+        # Gets the list of unique idx of src and dst from the given list of the file
+        # Convert to tensort to run unique and sort, then convert to lsit for enumerate
+        src_extract = torch.tensor(src).unique().numpy().tolist()
+        dst_extract = torch.tensor(dst).unique().numpy().tolist()
+
+        # Create a 0-n mapping for daily graph
+        new_src_ids = {k: i for i, k in enumerate(src_extract)}
+        new_dst_ids = {k: i for i, k in enumerate(dst_extract)}
+
+        # Get updated list of idx as it would be from day graphs nodes
+        new_src = [new_src_ids[x] for x in src]
+        new_dst = [new_dst_ids[x] for x in dst]
+
+        # Create daily graph edge index
+        edge_index = torch.tensor([new_src, new_dst])
+
+        return edge_index, src_extract, dst_extract
 
     def load_edge_csv(self, edge_file_path, edge_cols, src_index_col, src_mapping,
                       dst_index_col, dst_mapping, encoders=None):
@@ -161,36 +195,71 @@ class DailyData(Dataset):
 
         return src_extract, dst_extract, edge_index, edge_attr, edge_label
 
-    def get_edges(self, x, y):
-        src = np.random.randint(0, x, 350)
-        dest = np.random.randint(0, y, 350)
-        return [src, dest]
 
     def process(self):
-        node_dir = osp.join(self.raw_dir, "node-features/")
+
         edge_dir = os.path.join(self.raw_dir, 'relations/')
 
-        edge2to1scaler = self.get_scalers()
-        edge3to2scaler = self.get_scalers()
+        node1_feat, node1_mapping = self.load_full_node_csv("ship_feat.csv","ship_mapping.csv")
+        node2_feat, node2_mapping = self.load_full_node_csv("cust_feat.csv","cust_mapping.csv")
+        node3_feat, node3_mapping = self.load_full_node_csv("prod_feat.csv","prod_mapping.csv")
 
-        idx = 0
-        for _ in range(30):
-            # Read data from `raw_path`.
+        cop_edge_cols = ["cop1","cop2","cop3","lab1"]
+        sdc_edge_cols = ["sdc1","sdc2","sdc3","sdc4"]
+
+        cop_scaler = self.get_scalers(edge_cols=cop_edge_cols)
+        sdc_scaler = self.get_scalers(edge_cols=sdc_edge_cols)
+
+        #sdc_encoder = None
+        cop_encoder = None
+
+        sdc_encoder = {'lab2': IdentityEncoder(dtype=torch.long)}
+        #cop_encoder = {'net_qty': IdentityEncoder(dtype=torch.long)}
+
+        # Create data object
+        idx = 0  # keep track of data files
+        file_list = self.raw_file_names
+        for file_name in tqdm(file_list):
+            edge_file_path = file_name
             data = HeteroData()
-            data["node1"].x = torch.tensor(np.round(np.random.rand(125, 6) * 10), dtype=torch.float)
-            data["node2"].x = torch.tensor(np.round(np.random.rand(200, 6) * 20), dtype=torch.float)
-            data["node3"].x = torch.tensor(np.round(np.random.rand(10, 6) * 10), dtype=torch.float)
+            sdc_ship_extract, sdc_cust_extract, sdc_edge_index, sdc_edge_attr, sdc_edge_label = self.load_edge_csv(
+                edge_file_path,
+                edge_cols=sdc_edge_cols,
+                src_index_col="ship_name",
+                src_mapping=node1_mapping,
+                dst_index_col="cust_name",
+                dst_mapping=node2_mapping,
+                encoders=sdc_encoder)
 
-            data['node2', 'to', 'node1'].edge_index = torch.tensor(self.get_edges(200, 125), dtype=torch.long)
-            data['node3', 'to', 'node2'].edge_index = torch.tensor(self.get_edges(10, 200), dtype=torch.long)
+            cop_cust_extract, cop_prod_extract, cop_edge_index, cop_edge_attr, cop_edge_label = self.load_edge_csv(
+                edge_file_path,
+                edge_cols=cop_edge_cols,
+                src_index_col="cust_name",
+                src_mapping=node2_mapping,
+                dst_index_col="prod_name",
+                dst_mapping=node3_mapping,
+                encoders=cop_encoder)
+            # Check if nodes ids to extract are equal from both edges
+            # assert(cop_cust_extract==sdc_cust_extract)
+            for edge_type in [('node2', 'to', 'node3'), ('node1', 'to', 'node2')]:
+                if edge_type == ('node2', 'to', 'node3'):
+                    data['node2', 'to', 'node3'].edge_index = cop_edge_index  # [2, num_edges_orders]
+                    data['node2', 'to', 'node3'].edge_attr = torch.tensor(cop_edge_attr,dtype=torch.float)
+                    if cop_edge_label is not None:
+                        data['node2', 'orders', 'node3'].edge_label = cop_edge_label  # [num_edges,1]
+                    data['node2', 'to', 'node3'].edge_scaler = cop_scaler
 
-            data['node2', 'to', 'node1'].edge_attr = torch.tensor(np.round(np.random.rand(350, 6) * 10),
-                                                                dtype=torch.float)
-            data['node3', 'to', 'node2'].edge_attr = torch.tensor(np.round(np.random.rand(350, 5) * 10),
-                                                                dtype=torch.float)
+                else:
+                    data['node1', 'to', 'node2'].edge_index = sdc_edge_index  # [2, num_edges_delivered]
+                    data['node1', 'to', 'node2'].edge_attr = torch.tensor(sdc_edge_attr,dtype=torch.float)
+                    if sdc_edge_label is not None:
+                        data['node1', 'to', 'node2'].edge_label = sdc_edge_label  # [num_edges,1]
+                    data['node1', 'to', 'node2'].edge_scaler = sdc_scaler
 
-            data["node2", "to", "node1"].edge_label = torch.rand((350, 1))
-            data["node3", "to", "node2"].edge_label = torch.rand((350, 1))
+
+            data["node1"].x = torch.tensor(node1_feat[sdc_ship_extract], dtype=torch.float)
+            data["node2"].x = torch.tensor(node2_feat[sdc_cust_extract], dtype=torch.float)
+            data["node3"].x = torch.tensor(node3_feat[cop_prod_extract], dtype=torch.float)
 
             node_types, edge_types = data.metadata()
             for node_type in node_types:
@@ -215,22 +284,20 @@ class DailyData(Dataset):
 
 if __name__ == '__main__':
     root = osp.join(os.getcwd(), "dailyroot")
-    #transform = T.Compose([T.ToUndirected(), T.AddSelfLoops(), T.NormalizeFeatures(attrs=["x","edge_attr"])])
 
 
     data = DailyData(root)
-    edge_stats = tnf.getfullstats(data)
     del data
     shutil.rmtree(os.path.join(root,'processed'))
     transform1 = T.Compose([T.ToUndirected(),
                           T.AddSelfLoops(),
-                          tnf.ScaleEdges(stats=edge_stats, attrs=["edge_attr"]),
+                          tnf.ScaleEdges(attrs=["edge_attr"]),
                           T.NormalizeFeatures(attrs=["x", "edge_attr"]),
                           tnf.RevDelete()])
 
-    transform2 = T.Compose([T.ToUndirected(),
+    transform2 = T.Compose([tnf.ScaleEdges(attrs=["edge_attr"]),
+                            T.ToUndirected(),
                             T.AddSelfLoops(),
-                            tnf.ScaleEdges(attrs=["edge_attr"]),
                             #T.NormalizeFeatures(attrs=["x", "edge_attr"]),
                             tnf.RevDelete()])
 

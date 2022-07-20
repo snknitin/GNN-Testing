@@ -20,7 +20,7 @@ class RevDelete(BaseTransform):
         attrs (List[str]): The names of attributes to normalize.
             (default: :obj:`["x"]`)
     """
-    def __init__(self, attrs: List[str] = ["edge_attr"]):
+    def  __init__(self, attrs: List[str] = ["edge_attr"]):
         self.attrs = attrs
 
     def __call__(self, data: Union[Data, HeteroData]):
@@ -36,8 +36,14 @@ class RevDelete(BaseTransform):
 
 @functional_transform('scale_edges')
 class ScaleEdges(BaseTransform):
-    r"""Row-normalizes the attributes given in :obj:`attrs` to sum-up to one
+    r"""Column-normalizes the attributes given in :obj:`attrs` to sum-up to one
     (functional name: :obj:`normalize_features`).
+
+    Mainly useful for edges, if the scalar for the collective data edges is stored
+    as data[(node1,to,node2)].edge_scaler = scaler
+
+    where the scaler can be StandardScaler or MinMaxScaler from scikit-learn that
+    has been fit to the total dataset
 
     Args:
         attrs (List[str]): The names of attributes to normalize.
@@ -48,14 +54,13 @@ class ScaleEdges(BaseTransform):
 
     def __call__(self, data: Union[Data, HeteroData]):
         for edge,store in list(zip(data.edge_types,data.edge_stores)):
-            edge_stats = self.stats[edge]
             for key, value in store.items(*self.attrs):
-                value = value - value.min()
-                xmean = edge_stats["mean"]
-                xstd = edge_stats["std"]
-                xmin, xmax = edge_stats["min"], edge_stats["max"]
-                #value.div_(value.sum(dim=-1, keepdim=True).clamp_(min=1.))
-                store[key] = (value-xmean).div(xmax-xmin)
+                if "edge_scaler" in store.keys():
+                    scaler = store["edge_scaler"]
+                    # needs to be a float tensor since this is the edge_attr
+                    value = torch.tensor(scaler.transform(value),dtype=torch.float)
+                    store[key] = value
+                    del store["edge_scaler"]
         return data
 
     def __repr__(self) -> str:
