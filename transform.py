@@ -43,8 +43,7 @@ class ScaleEdges(BaseTransform):
         attrs (List[str]): The names of attributes to normalize.
             (default: :obj:`["x"]`)
     """
-    def __init__(self, stats, attrs: List[str] = ["edge_attr"]):
-        self.stats = stats
+    def __init__(self, attrs: List[str] = ["edge_attr"]):
         self.attrs = attrs
 
     def __call__(self, data: Union[Data, HeteroData]):

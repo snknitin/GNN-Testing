@@ -222,13 +222,19 @@ if __name__ == '__main__':
     edge_stats = tnf.getfullstats(data)
     del data
     shutil.rmtree(os.path.join(root,'processed'))
-    transform1 = T.Compose([T.NormalizeFeatures(attrs=["x", "edge_attr"])])
-    transform1_5 = T.Compose([tnf.ScaleEdges(stats=edge_stats)])
-    transform2 = T.Compose([T.NormalizeFeatures(attrs=["x", "edge_attr"]), T.ToUndirected(), T.AddSelfLoops()])
-    transform3 = T.Compose([tnf.ScaleEdges(stats=edge_stats, attrs=["edge_attr"]), T.ToUndirected(), T.AddSelfLoops(),T.NormalizeFeatures(attrs=["x", "edge_attr"])])
-    pre_tran = T.Compose([T.ToUndirected(), T.AddSelfLoops()])
+    transform1 = T.Compose([T.ToUndirected(),
+                          T.AddSelfLoops(),
+                          tnf.ScaleEdges(stats=edge_stats, attrs=["edge_attr"]),
+                          T.NormalizeFeatures(attrs=["x", "edge_attr"]),
+                          tnf.RevDelete()])
 
-    data = DailyData(root,transform=transform3)
+    transform2 = T.Compose([T.ToUndirected(),
+                            T.AddSelfLoops(),
+                            tnf.ScaleEdges(attrs=["edge_attr"]),
+                            #T.NormalizeFeatures(attrs=["x", "edge_attr"]),
+                            tnf.RevDelete()])
+
+    data = DailyData(root,transform=transform2)
 
     nd1 = data[0]
     print(nd1)
@@ -241,13 +247,3 @@ if __name__ == '__main__':
     # data1.to(device) # this doesn't work for daily
     print(data)
 
-
-    # idxs= list(data.edge_index_dict.items())
-    # #loader = DataLoader(data, batch_size=4)
-    # loader = LinkNeighborLoader(data,
-    #                             num_neighbors={key: [30] * 2 for key in data.edge_types},
-    #                             edge_label_index=[data.edge_types[0],data[data.edge_types[0]].edge_index],
-    #                             edge_label=data[data.edge_types[0]].edge_label,
-    #                             batch_size=1024)
-    # sampled_hetero_data = next(iter(loader))
-    # print(sampled_hetero_data)
