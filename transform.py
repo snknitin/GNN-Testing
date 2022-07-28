@@ -9,7 +9,6 @@ from torch_geometric.data import Data, HeteroData
 from torch_geometric.data.datapipes import functional_transform
 from torch_geometric.transforms import BaseTransform
 
-from data import DailyData
 
 
 @functional_transform('revlabel_delete')
@@ -96,28 +95,3 @@ def edge_norm_fn(data):
             x = data[i][edge].edge_attr
             data[i][edge].edge_attr = (x-xmean)/(xmax-xmin)
     return data
-
-def load_graph_data(root_dir, mode, transform_list):
-    """"""
-    print("Loading data into {}".format(root_dir))
-
-    if transform_list is None:
-        transform_list = T.Compose([
-            T.ToUndirected(),
-            T.AddSelfLoops(),
-            T.NormalizeFeatures(attrs=["x", "edge_attr"]),
-            RevDelete()
-        ])
-    if mode is None:mode="Net-Qty"
-    dailydata =  DailyData(root_dir, mode,
-                           transform = transform_list
-                           )
-
-    # Train test split of 80:10:10
-
-    n = (len(dailydata) + 9) // 10
-    train_data = dailydata[:-2*n]
-    val_data = dailydata[-2*n: -n]
-    test_data = dailydata[-n:]
-
-    return train_data,val_data,test_data

@@ -6,8 +6,6 @@ from sklearn.preprocessing import MinMaxScaler
 from torch_geometric.data import InMemoryDataset,Dataset, download_url
 from torch_geometric.data import HeteroData
 import pandas as pd
-from torch_geometric.loader import DataLoader
-from torch_geometric.loader import LinkNeighborLoader
 from tqdm import tqdm
 
 import transform as tnf
