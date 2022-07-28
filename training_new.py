@@ -165,6 +165,9 @@ if __name__=="__main__":
     valid_loss_min = np.Inf
     # Save train logs
 
+    loss = model(train_data_batch.x_dict, train_data_batch.edge_index_dict, train_data_batch.edge_attr_dict)
+    print(loss)
+
 
     for epoch in range(1,5):
         train_loss = train_runner(model, optimizer, train_loader, device)

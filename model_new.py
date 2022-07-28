@@ -1,12 +1,14 @@
 import torch
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch.nn.functional import leaky_relu, dropout
-from torch.nn import Linear, ReLU, BatchNorm1d, ModuleList, L1Loss, LeakyReLU, Dropout
+from torch.nn import Linear, ReLU, BatchNorm1d, ModuleList, L1Loss, LeakyReLU, Dropout, MSELoss
 from torch_geometric.nn import Sequential, SAGEConv, Linear, to_hetero,HeteroConv,GATConv,GINEConv
-
+import pytorch_lightning as pl
+from torch.nn.functional import mse_loss
 import collections
 
 
-class GNNEncoder(torch.nn.Module):
+class GNNEncoder(pl.LightningModule):
     def __init__(self, metadata,hidden_channels, out_channels, num_layers):
         super().__init__()
 
@@ -28,7 +30,7 @@ class GNNEncoder(torch.nn.Module):
         return x_dict
 
 
-class EdgeDecoder(torch.nn.Module):
+class EdgeDecoder(pl.LightningModule):
     def __init__(self, hidden_channels,out_channels):
         super().__init__()
         self.network = torch.nn.Sequential(
@@ -61,15 +63,27 @@ class EdgeDecoder(torch.nn.Module):
         return z4.view(-1)
 
 
-class NetQtyModel(torch.nn.Module):
+class NetQtyModel(pl.LightningModule):
     def __init__(self, metadata,hidden_channels,out_channels, num_layers):
         super().__init__()
         self.encoder = GNNEncoder(metadata, hidden_channels, out_channels, num_layers)
         self.decoder = EdgeDecoder(hidden_channels,out_channels)
+        self.loss = MSELoss()
 
     def forward(self, x_dict,edge_index_dict,edge_attr_dict):
         z_dict = self.encoder(x_dict, edge_index_dict)
         return self.decoder(z_dict,edge_index_dict,edge_attr_dict)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        return optimizer
+
+    def training_step(self, batch, batch_idx, *args, **kwargs) -> STEP_OUTPUT:
+        preds = self(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)  # pred_sla,pred_netqty
+        targets = batch[('node1', 'to', 'node2')].edge_label.flatten().float()
+        J = self.loss(preds,targets)
+        return J
+
 
 
 
