@@ -244,22 +244,22 @@ class DailyData(Dataset):
             for edge_type in [('node2', 'to', 'node3'), ('node1', 'to', 'node2')]:
                 if edge_type == ('node2', 'to', 'node3'):
                     data['node2', 'to', 'node3'].edge_index = cop_edge_index  # [2, num_edges_orders]
-                    data['node2', 'to', 'node3'].edge_attr = torch.tensor(cop_edge_attr,dtype=torch.float)
+                    data['node2', 'to', 'node3'].edge_attr = cop_edge_attr
                     if cop_edge_label is not None:
                         data['node2', 'orders', 'node3'].edge_label = cop_edge_label  # [num_edges,1]
                     data['node2', 'to', 'node3'].edge_scaler = cop_scaler
 
                 else:
                     data['node1', 'to', 'node2'].edge_index = sdc_edge_index  # [2, num_edges_delivered]
-                    data['node1', 'to', 'node2'].edge_attr = torch.tensor(sdc_edge_attr,dtype=torch.float)
+                    data['node1', 'to', 'node2'].edge_attr = sdc_edge_attr
                     if sdc_edge_label is not None:
                         data['node1', 'to', 'node2'].edge_label = sdc_edge_label  # [num_edges,1]
                     data['node1', 'to', 'node2'].edge_scaler = sdc_scaler
 
 
-            data["node1"].x = torch.tensor(node1_feat[sdc_ship_extract], dtype=torch.float)
-            data["node2"].x = torch.tensor(node2_feat[sdc_cust_extract], dtype=torch.float)
-            data["node3"].x = torch.tensor(node3_feat[cop_prod_extract], dtype=torch.float)
+            data["node1"].x = node1_feat[sdc_ship_extract]
+            data["node2"].x = node2_feat[sdc_cust_extract]
+            data["node3"].x = node3_feat[cop_prod_extract]
 
             node_types, edge_types = data.metadata()
             for node_type in node_types:
@@ -284,33 +284,19 @@ class DailyData(Dataset):
 
 if __name__ == '__main__':
     root = osp.join(os.getcwd(), "dailyroot")
+    proc_path = os.path.join(root, 'processed')
+    if os.path.exists(proc_path):
+        shutil.rmtree(os.path.join(root,'processed'))
 
+    if os.path.exists(proc_path):
+        shutil.rmtree(os.path.join(root,'processed'))
 
-    data = DailyData(root)
-    del data
-    shutil.rmtree(os.path.join(root,'processed'))
-    transform1 = T.Compose([T.ToUndirected(),
-                          T.AddSelfLoops(),
-                          tnf.ScaleEdges(attrs=["edge_attr"]),
-                          T.NormalizeFeatures(attrs=["x", "edge_attr"]),
-                          tnf.RevDelete()])
-
-    transform2 = T.Compose([tnf.ScaleEdges(attrs=["edge_attr"]),
+    transform = T.Compose([tnf.ScaleEdges(attrs=["edge_attr"]),
+                            T.NormalizeFeatures(attrs=["x", "edge_attr"]),
                             T.ToUndirected(),
                             T.AddSelfLoops(),
-                            #T.NormalizeFeatures(attrs=["x", "edge_attr"]),
                             tnf.RevDelete()])
 
-    data = DailyData(root,transform=transform2)
-
-    nd1 = data[0]
-    print(nd1)
-    print(nd1[nd1.edge_types[2]].edge_attr[0])
-    print(nd1["node1"].x[0])
-    # root = osp.join(os.getcwd(), "yearlyroot")
-    # data1 = YearlyData(root)[0] # need to remove the [0] for loaders
-
-    #data.to(device)
-    # data1.to(device) # this doesn't work for daily
-    print(data)
+    data2 = DailyData(root, transform=transform)
+    nd2 = data2[1]
 

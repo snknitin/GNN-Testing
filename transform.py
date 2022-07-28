@@ -14,11 +14,10 @@ from data import DailyData
 
 @functional_transform('revlabel_delete')
 class RevDelete(BaseTransform):
-    r"""Row-normalizes the attributes given in :obj:`attrs` to sum-up to one
-    (functional name: :obj:`normalize_features`).
+    r"""Deletes the edge_label on reverse edges.
     Args:
-        attrs (List[str]): The names of attributes to normalize.
-            (default: :obj:`["x"]`)
+        attrs (List[str]): The names of attributes to consider.
+            (default: :obj:`["edge_attr"]`)
     """
     def  __init__(self, attrs: List[str] = ["edge_attr"]):
         self.attrs = attrs
@@ -36,8 +35,7 @@ class RevDelete(BaseTransform):
 
 @functional_transform('scale_edges')
 class ScaleEdges(BaseTransform):
-    r"""Column-normalizes the attributes given in :obj:`attrs` to sum-up to one
-    (functional name: :obj:`normalize_features`).
+    r"""Column-normalizes the attributes given in :obj:`attrs` to standardize or scale them.
 
     Mainly useful for edges, if the scalar for the collective data edges is stored
     as data[(node1,to,node2)].edge_scaler = scaler
@@ -47,13 +45,13 @@ class ScaleEdges(BaseTransform):
 
     Args:
         attrs (List[str]): The names of attributes to normalize.
-            (default: :obj:`["x"]`)
+            (default: :obj:`["edge_attr"]`)
     """
     def __init__(self, attrs: List[str] = ["edge_attr"]):
         self.attrs = attrs
 
     def __call__(self, data: Union[Data, HeteroData]):
-        for edge,store in list(zip(data.edge_types,data.edge_stores)):
+        for store in data.stores:
             for key, value in store.items(*self.attrs):
                 if "edge_scaler" in store.keys():
                     scaler = store["edge_scaler"]
