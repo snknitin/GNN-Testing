@@ -117,7 +117,7 @@ class DailyData(Dataset):
         # Read edge_cols from all raw files
         df = pd.concat(map(f, self.raw_file_names))
         scaler = MinMaxScaler()
-        scaler.fit(df)
+        scaler.fit(df.to_numpy())
         del df
         return scaler
 
@@ -195,7 +195,7 @@ class DailyData(Dataset):
 
 
     def process(self):
-
+        print("Creating the data processed files for the first time")
         edge_dir = os.path.join(self.raw_dir, 'relations/')
 
         node1_feat, node1_mapping = self.load_full_node_csv("ship_feat.csv","ship_mapping.csv")
@@ -296,5 +296,7 @@ if __name__ == '__main__':
                             tnf.RevDelete()])
 
     data2 = DailyData(root, transform=transform)
+    #print(data2.metadata())
     nd2 = data2[1]
+    print(nd2.metadata())
 

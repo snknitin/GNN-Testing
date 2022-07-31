@@ -15,7 +15,7 @@ from torch.nn.functional import mse_loss
 from torch.nn import L1Loss
 import torch_geometric.transforms as T
 from torch_geometric.loader import DataLoader
-
+import transform as tnf
 from model_new import NetQtyModel
 import transform as tnf
 
@@ -132,11 +132,6 @@ if __name__=="__main__":
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=False)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
-
-    batch_size = 5 # number of days/graphs to be taken in one batch
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=False)
-    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
-    test_loader = DataLoader(test_data, batch_size=batch_size,shuffle=False)
 
 
 
