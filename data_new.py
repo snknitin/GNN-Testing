@@ -70,8 +70,17 @@ class GraphDataModule(pl.LightningDataModule):
     def test_dataloader(self) -> EVAL_DATALOADERS:
         return DataLoader(self.test_data, batch_size=self.batch_size, shuffle=False)
 
-    def transfer_batch_to_device(self, batch: Any, device: torch.device, dataloader_idx: int) -> Any:
-        ...
+    # def transfer_batch_to_device(self, batch: Any, device: torch.device, dataloader_idx: int) -> Any:
+    #     if isinstance(batch, CustomBatch):
+    #         # move all tensors in your custom data structure to the device
+    #         batch.samples = batch.samples.to(device)
+    #         batch.targets = batch.targets.to(device)
+    #     elif dataloader_idx == 0:
+    #         # skip device transfer for the first dataloader or anything you wish
+    #         pass
+    #     else:
+    #         batch = super().transfer_batch_to_device(data, device, dataloader_idx)
+    #     return batch
 
     # def on_before_batch_transfer(self, batch, dataloader_idx):
     #     batch['x'] = transforms(batch['x'])
@@ -80,22 +89,5 @@ class GraphDataModule(pl.LightningDataModule):
 
 if __name__ == '__main__':
     root = osp.join(os.getcwd(), "dailyroot")
-    # proc_path = os.path.join(root, 'processed')
-    # if os.path.exists(proc_path):
-    #     shutil.rmtree(os.path.join(root,'processed'))
-    #
-    # if os.path.exists(proc_path):
-    #     shutil.rmtree(os.path.join(root,'processed'))
-    #
-    # transform = T.Compose([tnf.ScaleEdges(attrs=["edge_attr"]),
-    #                         T.NormalizeFeatures(attrs=["x", "edge_attr"]),
-    #                         T.ToUndirected(),
-    #                         T.AddSelfLoops(),
-    #                         tnf.RevDelete()])
-    #
-    # data2 = DailyData(root, transform=transform)
-    # nd2 = data2[1]
-
     data = GraphDataModule(root,5)
     print(data.metadata)
-    #y= next(data.train_dataloader())
