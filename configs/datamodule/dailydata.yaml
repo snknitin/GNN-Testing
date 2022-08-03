@@ -1,6 +1,6 @@
 _target_: data_new.GraphDataModule
 data_dir: dailyroot
 batch_size: 8
-train_val_test_split: [80,10,10]
+train_val_test_split: [0.80,0.10,0.10]
 num_workers: 4 # os.cpu_count()
 pin_memory: False

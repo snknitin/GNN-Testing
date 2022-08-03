@@ -1,5 +1,12 @@
 _target_: model_new.NetQtyModel
 
+lr: 0.01
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  weight_decay: 0.0
+
 encoder:
   _target_: models.GNNEncoder
   hidden_channels: 64

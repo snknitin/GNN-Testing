@@ -24,7 +24,7 @@ class IdentityEncoder(object):
 class GraphDataModule(pl.LightningDataModule):
     def __init__(self,
                  data_dir: str = "dailyroot/",
-                 train_val_test_split= [80,10,10],
+                 train_val_test_split= [0.80,0.10,0.10],
                  batch_size: int = 64,
                  num_workers: int = 0,
                  pin_memory: bool = False):
