@@ -1,28 +1,16 @@
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 import torch
-import os
-import os.path as osp
-import numpy as np
 from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
-from sklearn.preprocessing import MinMaxScaler
-from torch_geometric.data import InMemoryDataset,Dataset, download_url
-from torch_geometric.data import HeteroData
-import pandas as pd
-from tqdm import tqdm
-
 import transform as tnf
 import torch_geometric.transforms as T
 from torch_geometric.loader import DataLoader
-import random
-import shutil
 import pytorch_lightning as pl
 
 from data import DailyData
-random.seed(42)
-torch.manual_seed(3407)
-np.random.seed(0)
-
+import hydra
+import omegaconf
+import pyrootutils
 
 
 class IdentityEncoder(object):
@@ -34,10 +22,17 @@ class IdentityEncoder(object):
 
 
 class GraphDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "path/to/dir", batch_size: int = 32):
+    def __init__(self,
+                 data_dir: str = "dailyroot/",
+                 train_val_test_split= [80,10,10],
+                 batch_size: int = 64,
+                 num_workers: int = 0,
+                 pin_memory: bool = False):
         super().__init__()
         self.data_dir = data_dir
-        self.batch_size = batch_size
+        # this line allows to access init params with 'self.hparams' attribute
+        # also ensures init params will be stored in ckpt
+        self.save_hyperparameters(logger=False)
         self.transform = T.Compose([tnf.ScaleEdges(attrs=["edge_attr"]),
                             T.NormalizeFeatures(attrs=["x", "edge_attr"]),
                             T.ToUndirected(),
@@ -47,14 +42,15 @@ class GraphDataModule(pl.LightningDataModule):
     def prepare_data(self) -> None:
         # Download logic or first time prep
         # It is not recommended to assign state here (e.g. self.x = y).
-        DailyData(self.data_dir,transform=self.transform)
+        DailyData(self.hparams.data_dir,transform=self.transform)
 
     def setup(self, stage: Optional[str] = None) -> None:
         # data operations you might want to perform on every GPU
 
-        data = DailyData(self.data_dir,transform=self.transform)
+        data = DailyData(self.hparams.data_dir,transform=self.transform)
         self.metadata = data[0].metadata()
         n = (len(data) + 9) // 10
+        lengths = self.hparams.train_val_test_split
         if stage=="fit" or stage is None:
             self.train_data = data[:-2 * n]
             self.val_data = data[-2 * n: -n]
@@ -62,13 +58,25 @@ class GraphDataModule(pl.LightningDataModule):
             self.test_data = data[-n:]
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
-        return DataLoader(self.train_data, batch_size=self.batch_size, shuffle=False)
+        return DataLoader(self.train_data,batch_size=self.hparams.batch_size,num_workers=self.hparams.num_workers,pin_memory=self.hparams.pin_memory, shuffle=False)
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
-        return DataLoader(self.val_data, batch_size=self.batch_size, shuffle=False)
+        return DataLoader(self.val_data,batch_size=self.hparams.batch_size,num_workers=self.hparams.num_workers,pin_memory=self.hparams.pin_memory, shuffle=False)
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
-        return DataLoader(self.test_data, batch_size=self.batch_size, shuffle=False)
+        return DataLoader(self.test_data, batch_size=self.hparams.batch_size,num_workers=self.hparams.num_workers,pin_memory=self.hparams.pin_memory, shuffle=False)
+
+    def teardown(self, stage: Optional[str] = None):
+        """Clean up after fit or test."""
+        pass
+
+    def state_dict(self):
+        """Extra things to save to checkpoint."""
+        return {}
+
+    def load_state_dict(self, state_dict: Dict[str, Any]):
+        """Things to do when loading checkpoint."""
+        pass
 
     # def transfer_batch_to_device(self, batch: Any, device: torch.device, dataloader_idx: int) -> Any:
     #     if isinstance(batch, CustomBatch):
@@ -88,6 +96,14 @@ class GraphDataModule(pl.LightningDataModule):
 
 
 if __name__ == '__main__':
-    root = osp.join(os.getcwd(), "dailyroot")
-    data = GraphDataModule(root,5)
+    root = pyrootutils.setup_root(__file__, pythonpath=True)
+    cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "dailydata.yaml")
+    #cfg.data_dir = str(root / "dailyroot")
+    data = hydra.utils.instantiate(cfg)
+
+
+
+    data.prepare_data()
+    data.setup()
     print(data.metadata)
+    print(next(iter(data.train_dataloader())))

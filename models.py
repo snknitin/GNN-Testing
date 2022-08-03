@@ -5,12 +5,20 @@ from torch_geometric.nn import Sequential, SAGEConv, Linear, to_hetero,HeteroCon
 
 
 class GNNEncoder(torch.nn.Module):
-    def __init__(self, metadata, hidden_channels, out_channels, num_layers):
+    def __init__(self,hidden_channels,out_channels,num_layers):
         super().__init__()
 
-        layers = (hidden_channels, out_channels)
+        self.hidden_channels = hidden_channels
+        self.out_channels = out_channels
+        self.num_layers = num_layers
+        metadata = (['node1', 'node2', 'node3'],
+                    [('node2', 'to', 'node3'),
+                     ('node1', 'to', 'node2'),
+                     ('node3', 'rev_to', 'node2'),
+                     ('node2', 'rev_to', 'node1')])
         self.convs = torch.nn.ModuleList()
-        for i in range(num_layers):
+        layers = (self.hidden_channels, self.out_channels)
+        for i in range(self.num_layers):
             conv = HeteroConv({
                 edge_type: SAGEConv((-1, -1), layers[i])
                 for edge_type in metadata[1]
@@ -29,6 +37,10 @@ class GNNEncoder(torch.nn.Module):
 class EdgeDecoder(torch.nn.Module):
     def __init__(self, hidden_channels,out_channels):
         super().__init__()
+
+        self.hidden_channels = hidden_channels
+        self.out_channels = out_channels
+
         self.network = torch.nn.Sequential(
             Linear(-1, hidden_channels),
             LeakyReLU(),

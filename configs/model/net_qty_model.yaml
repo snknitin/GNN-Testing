@@ -1,0 +1,13 @@
+_target_: model_new.NetQtyModel
+
+encoder:
+  _target_: models.GNNEncoder
+  hidden_channels: 64
+  out_channels: 8
+  num_layers: 2
+
+
+decoder:
+  _target_: models.EdgeDecoder
+  hidden_channels: 64
+  out_channels: 8
