@@ -112,10 +112,18 @@ if __name__=="__main__":
     model= hydra.utils.instantiate(model_cfg)
 
     # Enable chkpt , gpu, epochs
-    trainer = pl.Trainer(max_steps=50,max_epochs=15,log_every_n_steps=3,
-                         check_val_every_n_epoch=3,
-                         progress_bar_refresh_rate=10
+    trainer = pl.Trainer(max_steps=50,max_epochs=15,
+                         log_every_n_steps=5,
+                         check_val_every_n_epoch=3,gradient_clip_val=1.0,deterministic=True,
+                         progress_bar_refresh_rate=10,
+                         auto_lr_find=True
+                         #overfit_batches=10
                          )
+    # Autotune LR
+    # lr_finder = trainer.tuner.lr_find(model=model,datamodule=data,max_lr=0.01)
+    # model.lr = lr_finder.suggestion()
+    # print(model.lr)
+
     trainer.fit(model=model,datamodule=data)
     # trainer = pl.Trainer(max_steps=1000,max_epochs=500,check_val_every_n_epochs=10,
     #                      auto_lr_find=True,gradient_clip_val=1.0,deterministic=True,
