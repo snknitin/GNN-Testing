@@ -1,13 +1,11 @@
 from typing import Optional, Union, List
 import torch
-from torch.nn import Linear, ReLU, BatchNorm1d, ModuleList, L1Loss, LeakyReLU, Dropout, MSELoss
+from torch.nn import MSELoss
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.types import STEP_OUTPUT, TRAIN_DATALOADERS, EVAL_DATALOADERS, EPOCH_OUTPUT
+from pytorch_lightning.utilities.types import STEP_OUTPUT, EPOCH_OUTPUT
 import torch_geometric.transforms as T
 import transform as tnf
 import os
-from models import GNNEncoder,EdgeDecoder
-from data_new import GraphDataModule
 import hydra
 import omegaconf
 import pyrootutils
@@ -102,7 +100,7 @@ class NetQtyModel(pl.LightningModule):
 
 if __name__=="__main__":
     pl.seed_everything(42)
-    data_dir = os.path.join(os.getcwd(), "dailyroot")
+    data_dir = os.path.join(os.getcwd(), "../../dailyroot")
     root = pyrootutils.setup_root(__file__, pythonpath=True)
 
     data_cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "dailydata.yaml")
