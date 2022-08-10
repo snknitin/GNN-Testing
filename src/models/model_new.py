@@ -99,7 +99,7 @@ class NetQtyModel(pl.LightningModule):
 
 
 if __name__=="__main__":
-    pl.seed_everything(42)
+    pl.seed_everything(3407)
     data_dir = os.path.join(os.getcwd(), "../../dailyroot")
     root = pyrootutils.setup_root(__file__, pythonpath=True)
 

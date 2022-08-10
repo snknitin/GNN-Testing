@@ -98,9 +98,8 @@ class GraphDataModule(pl.LightningDataModule):
 if __name__ == '__main__':
     root = pyrootutils.setup_root(__file__, pythonpath=True)
     cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "dailydata.yaml")
-    #cfg.data_dir = str(root / "dailyroot")
+    #cfg.data_dir = str(root / cfg.data_dir)
     data = hydra.utils.instantiate(cfg)
-
 
 
     data.prepare_data()

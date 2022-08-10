@@ -1,5 +1,5 @@
-_target_: data_new.GraphDataModule
-data_dir: dailyroot
+_target_: src.datamodule.data_new.GraphDataModule
+data_dir: ${paths.data_dir}/dailyroot
 batch_size: 10
 train_val_test_split: [0.80,0.10,0.10]
 num_workers: 4 # os.cpu_count()
