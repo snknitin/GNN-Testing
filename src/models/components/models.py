@@ -1,6 +1,6 @@
 import torch
 from torch.nn.functional import leaky_relu, dropout
-from torch.nn import Linear, ReLU, BatchNorm1d, ModuleList, L1Loss, LeakyReLU, Dropout, MSELoss
+from torch.nn import Linear, ReLU, BatchNorm1d, ModuleList, L1Loss, LeakyReLU, Dropout, MSELoss,SELU
 from torch_geometric.nn import Sequential, SAGEConv, Linear, to_hetero,HeteroConv,GATConv,GINEConv
 
 
@@ -43,13 +43,13 @@ class EdgeDecoder(torch.nn.Module):
 
         self.network = torch.nn.Sequential(
             Linear(-1, hidden_channels),
-            LeakyReLU(),
+            SELU(),
             Dropout(p=0.2),
             Linear(hidden_channels, out_channels),
-            LeakyReLU(),
+            SELU(),
             Dropout(p=0.2),
             Linear(out_channels, 32),
-            LeakyReLU(),
+            SELU(),
             Dropout(p=0.2),
             Linear(32, 1)
         )
