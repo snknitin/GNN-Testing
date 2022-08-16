@@ -3,7 +3,17 @@ from torchmetrics import Metric
 import torch
 from torchmetrics import Accuracy,MeanAbsolutePercentageError,SymmetricMeanAbsolutePercentageError
 from torchmetrics import MeanAbsoluteError,MeanSquaredError,R2Score,KLDivergence,WeightedMeanAbsolutePercentageError
+from torchmetrics import MetricCollection
 
+
+metric_collection = MetricCollection([
+        MeanAbsoluteError(),
+        MeanSquaredError(),
+        R2Score(multioutput='uniform_average')
+        # MeanAbsolutePercentageError(),
+        # SymmetricMeanAbsolutePercentageError(),
+        # WeightedMeanAbsolutePercentageError()
+    ])
 
 class CustomMetrics(Metric):
     # Set to True if the metric is differentiable else set to False
@@ -37,14 +47,20 @@ class CustomMetrics(Metric):
     def compute(self):
         return {'mae':self.mae(preds, targets),
                 'mse':self.mse(preds,targets),
-                'rmse':torch.sqrt(torch.mean(self.mse(preds,targets))),
+                'rmse':torch.sqrt(self.mse(preds,targets)),
                 'r2':self.r2(preds, targets)}
 
 
 if __name__ == "__main__":
     preds = torch.tensor([28,145,69,84,92,50,39],dtype=torch.float)
     targets = torch.tensor([24,120,73,84,86,38,48],dtype=torch.float)
+    metric_collection = MetricCollection([
+        MeanAbsoluteError(),
+        MeanSquaredError(),
+        R2Score(multioutput='uniform_average')
+    ])
     metric = CustomMetrics()
     metric(preds,targets)
+    #acc = metric_collection(preds,targets)
     acc = metric.compute()
     print(acc)

@@ -9,7 +9,7 @@ import os
 import hydra
 import omegaconf
 import pyrootutils
-from metrics import CustomMetrics
+from metrics import CustomMetrics,metric_collection
 
 
 
@@ -29,12 +29,11 @@ class NetQtyModel(pl.LightningModule):
 
         self.encoder = self.hparams.encoder
         self.decoder = self.hparams.decoder
+        self.lr = lr
 
-        self.train_metrics = CustomMetrics()
-        self.val_metrics = CustomMetrics()
-        self.test_metrics = CustomMetrics()
-        self.lr=lr
-
+        self.metrics = {'train':metric_collection,
+                        'val':metric_collection,
+                        'test':metric_collection}
 
 
     def forward(self, x_dict,edge_index_dict,edge_attr_dict):
@@ -52,58 +51,86 @@ class NetQtyModel(pl.LightningModule):
                                                       cycle_momentum=False)
         return [optimizer], [lr_scheduler]
 
+    # compute
+    def compute_metrics(self,preds,targets,mode):
+        preds = preds.detach().cpu().int()
+        targets = targets.detach().cpu().int()
+        acc = self.metrics[mode](preds, targets)
+        return acc
 
-    def training_step(self, batch, batch_idx, *args, **kwargs) -> STEP_OUTPUT:
-        preds = self(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
-        targets = batch[('node1', 'to', 'node2')].edge_label.flatten().float()
-        loss = self.loss_function(preds,targets)
-        return {'loss': loss}
+    # logging
+    def logging_step(self,loss,acc,mode) -> None:
+        self.log(f"{mode}/step/loss",loss,on_epoch=False,on_step=True,rank_zero_only=True,prog_bar=True)
+        for metric_name, ac in acc.items():
+            self.log(f"{mode}/step/{metric_name}",ac,on_epoch=False,on_step=True,rank_zero_only=True)
 
-    def training_epoch_end(self, training_step_outputs: EPOCH_OUTPUT) -> None:
-        avg_loss = torch.stack([x["loss"] for x in training_step_outputs]).mean()
-        self.log("loss",avg_loss,on_step=False,on_epoch=True)
+    def logging_epoch(self, avg_loss,acc, mode):
+        self.log(f"{mode}/epoch/loss", avg_loss, on_step=False, on_epoch=True, prog_bar=True, rank_zero_only=True)
+        for metric_name,ac in acc.items():
+            self.log(f"{mode}/epoch/{metric_name}", ac, on_step=False, on_epoch=True, prog_bar=True,rank_zero_only=True)
+        self.metrics[mode].reset()
 
-    def validation_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
-        results = self.training_step(batch,batch_idx)
-        return results
-
-    def validation_epoch_end(self, val_step_outputs: Union[EPOCH_OUTPUT, List[EPOCH_OUTPUT]]) -> None:
-        # [results,results,results ...]
-        avg_val_loss = torch.stack([x["loss"] for x in val_step_outputs]).mean()
-        self.log("val_loss",avg_val_loss,on_step=False,on_epoch=True,prog_bar=True)
-        results = {'progress_bar': {'val_loss':avg_val_loss},
-                   'val_loss': avg_val_loss}
-        return results
-
-
-
-    def test_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
-        preds = self(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
-        targets = batch[('node1', 'to', 'node2')].edge_label.flatten().float()
-        test_loss = self.loss_function(preds,targets)
-        self.log("test_loss", test_loss)
-        return {"val_loss":test_loss}
-
-    def _shared_eval(self, batch, batch_idx, stage):
+    def _shared_step(self, batch, batch_idx, mode):
         preds = self(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
         targets = batch[('node1', 'to', 'node2')].edge_label.flatten().float()
         loss = self.loss_function(preds, targets)
-        self.log(f"{stage}_loss", loss,on_step=False,on_epoch=True,prog_bar=True)
-        return {f"{stage}_loss":loss}
+        acc = self.compute_metrics(preds, targets, mode)
+        self.logging_step(loss, acc, mode)
+        results = {'loss': loss,'preds':preds,'targets':targets}
+        return results
 
-    def predict_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
-        preds = self(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
-        return preds
+    # Training
+    def training_step(self, batch, batch_idx, *args, **kwargs) -> STEP_OUTPUT:
+        mode = "train"
+        results = self._shared_step(batch, batch_idx, mode)
+        return results
 
+    def validation_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
+        mode = "val"
+        results = self._shared_step(batch, batch_idx, mode)
+        return results
+
+    # def training_epoch_end(self, training_step_outputs: EPOCH_OUTPUT) -> None:
+    #     mode="train"
+    #     avg_loss = torch.stack([x["loss"] for x in training_step_outputs]).mean()
+    #     all_preds = torch.hstack([x["preds"] for x in training_step_outputs])
+    #     all_targets = torch.hstack([x["targets"] for x in training_step_outputs])
+    #     acc = self.compute_metrics(all_preds,all_targets, mode)
+    #     self.logging_epoch(avg_loss,acc, mode)
+
+
+    # def validation_epoch_end(self, val_step_outputs: Union[EPOCH_OUTPUT, List[EPOCH_OUTPUT]]) -> None:
+    #     # [results,results,results ...]
+    #     mode = "val"
+    #     avg_val_loss = torch.stack([x["loss"] for x in val_step_outputs]).mean()
+    #     all_preds = torch.hstack([x["preds"] for x in val_step_outputs])
+    #     all_targets = torch.hstack([x["targets"] for x in val_step_outputs])
+    #     acc = self.compute_metrics(all_preds, all_targets, mode)
+    #     self.logging_epoch(avg_val_loss,acc, mode)
+    #     results = {'progress_bar': {'val_loss':avg_val_loss},
+    #                'val_loss': avg_val_loss}
+    #     return results
+
+    #
+    # def test_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
+    #     mode = "test"
+    #     self._shared_step(batch, batch_idx, mode)
+    #
+    #
+    # def predict_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
+    #     preds = self(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
+    #     return preds
+    #
 
 
 
 if __name__=="__main__":
     pl.seed_everything(3407)
-    data_dir = os.path.join(os.getcwd(), "../../dailyroot")
+    data_dir = os.path.join(os.getcwd(), "../../data/dailyroot")
     root = pyrootutils.setup_root(__file__, pythonpath=True)
 
     data_cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "dailydata.yaml")
+    data_cfg.data_dir=data_dir
     data = hydra.utils.instantiate(data_cfg)
 
     model_cfg = omegaconf.OmegaConf.load(root / "configs" / "model" / "net_qty_model.yaml")
@@ -112,9 +139,11 @@ if __name__=="__main__":
     # Enable chkpt , gpu, epochs
     trainer = pl.Trainer(max_steps=50,max_epochs=15,
                          log_every_n_steps=5,
-                         check_val_every_n_epoch=3,gradient_clip_val=1.0,deterministic=True,
-                         progress_bar_refresh_rate=10,
-                         auto_lr_find=True
+                         check_val_every_n_epoch=3,
+                         gradient_clip_val=1.0,
+                         deterministic=True,
+                         progress_bar_refresh_rate=10
+                         #auto_lr_find=True
                          #overfit_batches=10
                          )
     # Autotune LR
