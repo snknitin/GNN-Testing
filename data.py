@@ -281,7 +281,7 @@ class DailyData(Dataset):
 
 
 if __name__ == '__main__':
-    root = osp.join(os.getcwd(), "dailyroot")
+    root = osp.join(os.getcwd(), "data/dailyroot")
     proc_path = os.path.join(root, 'processed')
     if os.path.exists(proc_path):
         shutil.rmtree(os.path.join(root,'processed'))

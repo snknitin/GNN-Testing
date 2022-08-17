@@ -10,7 +10,7 @@ import hydra
 import omegaconf
 import pyrootutils
 from metrics import CustomMetrics,metric_collection
-
+from pytorch_lightning.callbacks import Callback,EarlyStopping,ModelCheckpoint,RichProgressBar,ModelSummary
 
 
 
@@ -30,6 +30,7 @@ class NetQtyModel(pl.LightningModule):
         self.encoder = self.hparams.encoder
         self.decoder = self.hparams.decoder
         self.lr = lr
+
 
         self.metrics = {'train':metric_collection,
                         'val':metric_collection,
@@ -60,14 +61,14 @@ class NetQtyModel(pl.LightningModule):
 
     # logging
     def logging_step(self,loss,acc,mode) -> None:
-        self.log(f"{mode}/step/loss",loss,on_epoch=False,on_step=True,rank_zero_only=True,prog_bar=True)
+        self.log(f"{mode}/step/loss",loss,on_epoch=False,on_step=True,rank_zero_only=True)
         for metric_name, ac in acc.items():
             self.log(f"{mode}/step/{metric_name}",ac,on_epoch=False,on_step=True,rank_zero_only=True)
 
     def logging_epoch(self, avg_loss,acc, mode):
         self.log(f"{mode}/epoch/loss", avg_loss, on_step=False, on_epoch=True, prog_bar=True, rank_zero_only=True)
         for metric_name,ac in acc.items():
-            self.log(f"{mode}/epoch/{metric_name}", ac, on_step=False, on_epoch=True, prog_bar=True,rank_zero_only=True)
+            self.log(f"{mode}/epoch/{metric_name}", ac, on_step=False, on_epoch=True,rank_zero_only=True)
         self.metrics[mode].reset()
 
     def _shared_step(self, batch, batch_idx, mode):
@@ -90,26 +91,26 @@ class NetQtyModel(pl.LightningModule):
         results = self._shared_step(batch, batch_idx, mode)
         return results
 
-    # def training_epoch_end(self, training_step_outputs: EPOCH_OUTPUT) -> None:
-    #     mode="train"
-    #     avg_loss = torch.stack([x["loss"] for x in training_step_outputs]).mean()
-    #     all_preds = torch.hstack([x["preds"] for x in training_step_outputs])
-    #     all_targets = torch.hstack([x["targets"] for x in training_step_outputs])
-    #     acc = self.compute_metrics(all_preds,all_targets, mode)
-    #     self.logging_epoch(avg_loss,acc, mode)
+    def training_epoch_end(self, training_step_outputs: EPOCH_OUTPUT) -> None:
+        mode="train"
+        avg_loss = torch.stack([x["loss"] for x in training_step_outputs]).mean()
+        all_preds = torch.hstack([x["preds"] for x in training_step_outputs])
+        all_targets = torch.hstack([x["targets"] for x in training_step_outputs])
+        acc = self.compute_metrics(all_preds,all_targets, mode)
+        self.logging_epoch(avg_loss,acc, mode)
 
 
-    # def validation_epoch_end(self, val_step_outputs: Union[EPOCH_OUTPUT, List[EPOCH_OUTPUT]]) -> None:
-    #     # [results,results,results ...]
-    #     mode = "val"
-    #     avg_val_loss = torch.stack([x["loss"] for x in val_step_outputs]).mean()
-    #     all_preds = torch.hstack([x["preds"] for x in val_step_outputs])
-    #     all_targets = torch.hstack([x["targets"] for x in val_step_outputs])
-    #     acc = self.compute_metrics(all_preds, all_targets, mode)
-    #     self.logging_epoch(avg_val_loss,acc, mode)
-    #     results = {'progress_bar': {'val_loss':avg_val_loss},
-    #                'val_loss': avg_val_loss}
-    #     return results
+    def validation_epoch_end(self, val_step_outputs: Union[EPOCH_OUTPUT, List[EPOCH_OUTPUT]]) -> None:
+        # [results,results,results ...]
+        mode = "val"
+        avg_val_loss = torch.stack([x["loss"] for x in val_step_outputs]).mean()
+        all_preds = torch.hstack([x["preds"] for x in val_step_outputs])
+        all_targets = torch.hstack([x["targets"] for x in val_step_outputs])
+        acc = self.compute_metrics(all_preds, all_targets, mode)
+        self.logging_epoch(avg_val_loss,acc, mode)
+        results = {'progress_bar': {'val_loss':avg_val_loss},
+                   'val_loss': avg_val_loss}
+        return results
 
     #
     # def test_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
@@ -136,13 +137,37 @@ if __name__=="__main__":
     model_cfg = omegaconf.OmegaConf.load(root / "configs" / "model" / "net_qty_model.yaml")
     model= hydra.utils.instantiate(model_cfg)
 
+    experiment_dir = os.path.join(os.getcwd(), "../../src/outputs")
+    callbacks = []
+    goldstar_metric = "val/epoch/loss"
+    filename_format = "epoch={epoch:04d}-validation.loss={validation/loss:.3f}"
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+        save_top_k=3,
+        filename=filename_format,
+        monitor=goldstar_metric,
+        mode="min",
+        auto_insert_metric_name=False,
+        dirpath=experiment_dir,
+        every_n_epochs=3,
+    )
+
+    summary_callback = pl.callbacks.ModelSummary(max_depth=2)
+
+    callbacks = [summary_callback, checkpoint_callback]
+
+    early_stopping_callback = pl.callbacks.EarlyStopping(
+        monitor="val/epoch/loss", mode="min", patience=3
+    )
+    callbacks.append(early_stopping_callback)
     # Enable chkpt , gpu, epochs
-    trainer = pl.Trainer(max_steps=50,max_epochs=15,
+    trainer = pl.Trainer(accelerator='gpu', devices=1,
+                         max_steps=1000,max_epochs=15,
                          log_every_n_steps=5,
                          check_val_every_n_epoch=3,
                          gradient_clip_val=1.0,
-                         deterministic=True,
-                         progress_bar_refresh_rate=10
+                         #deterministic=True,
+                         progress_bar_refresh_rate=10,
+                         callbacks=callbacks
                          #auto_lr_find=True
                          #overfit_batches=10
                          )

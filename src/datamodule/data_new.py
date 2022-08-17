@@ -1,10 +1,11 @@
-from typing import Optional, Any, Dict
+from typing import Dict, List, Optional, Tuple
 
 import torch
 from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
 import transform as tnf
 import torch_geometric.transforms as T
 from torch_geometric.loader import DataLoader
+from torch_geometric.typing import EdgeType, NodeType
 import pytorch_lightning as pl
 
 from data import DailyData
@@ -56,6 +57,14 @@ class GraphDataModule(pl.LightningDataModule):
             self.val_data = data[-2 * n: -n]
         if stage =="test" or stage is None:
             self.test_data = data[-n:]
+
+    def metadata(self) -> Tuple[List[NodeType], List[EdgeType]]:
+        node_types = ['node1', 'node2', 'node3']
+        edge_types = [('node2', 'to', 'node3'),
+                      ('node1', 'to', 'node2'),
+                      ('node3', 'rev_to', 'node2'),
+                      ('node2', 'rev_to', 'node1')]
+        return node_types, edge_types
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
         return DataLoader(self.train_data,batch_size=self.hparams.batch_size,num_workers=self.hparams.num_workers,pin_memory=self.hparams.pin_memory, shuffle=False)
