@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple
 
 import torch
 from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
@@ -106,8 +106,9 @@ class GraphDataModule(pl.LightningDataModule):
 
 if __name__ == '__main__':
     root = pyrootutils.setup_root(__file__, pythonpath=True)
-    cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "dailydata.yaml")
-    #cfg.data_dir = str(root / cfg.data_dir)
+
+    cfg = omegaconf.OmegaConf.load(root / "configs"/"datamodule"/ "dailydata.yaml")
+    # cfg.data_dir = str(root / cfg.data_dir)
     data = hydra.utils.instantiate(cfg)
 
 

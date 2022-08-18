@@ -130,13 +130,19 @@ if __name__=="__main__":
     data_dir = os.path.join(os.getcwd(), "../../data/dailyroot")
     root = pyrootutils.setup_root(__file__, pythonpath=True)
 
+    paths_cfg = omegaconf.OmegaConf.load(root / "configs" / "paths" / "default.yaml")
+    paths = hydra.utils.instantiate(paths_cfg)
+
+
     data_cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "dailydata.yaml")
-    data_cfg.data_dir=data_dir
+    #data_cfg.data_dir=data_dir
     data = hydra.utils.instantiate(data_cfg)
 
     model_cfg = omegaconf.OmegaConf.load(root / "configs" / "model" / "net_qty_model.yaml")
     model= hydra.utils.instantiate(model_cfg)
 
+    # callbacks_cfg = omegaconf.OmegaConf.load(root / "configs" / "callbacks" / "default.yaml")
+    # callbacks = hydra.utils.instantiate(callbacks_cfg)
     experiment_dir = os.path.join(os.getcwd(), "../../src/outputs")
     callbacks = []
     goldstar_metric = "val/epoch/loss"
@@ -159,14 +165,16 @@ if __name__=="__main__":
         monitor="val/epoch/loss", mode="min", patience=3
     )
     callbacks.append(early_stopping_callback)
+
     # Enable chkpt , gpu, epochs
-    trainer = pl.Trainer(accelerator='gpu', devices=1,
-                         max_steps=1000,max_epochs=15,
+    trainer = pl.Trainer(
+                         max_steps=1000,max_epochs=25,
+                         #accelerator='gpu', devices=1,
                          log_every_n_steps=5,
                          check_val_every_n_epoch=3,
                          gradient_clip_val=1.0,
-                         #deterministic=True,
-                         progress_bar_refresh_rate=10,
+                         deterministic=True,
+                         progress_bar_refresh_rate=5,
                          callbacks=callbacks
                          #auto_lr_find=True
                          #overfit_batches=10
@@ -185,3 +193,5 @@ if __name__=="__main__":
     # trainer.validate(model)
     # trainer.test(model)
     # trainer.predict(model)
+
+    # print on callback
