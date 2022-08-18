@@ -30,25 +30,38 @@ class CustomMetrics(Metric):
 
     def __init__(self):
         super().__init__()
-        self.add_state("mae", default=torch.tensor(0), dist_reduce_fx="mean")
-        self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
-        self.add_state("rmse", default=torch.tensor(0), dist_reduce_fx="mean")
-        self.add_state("r2", default=torch.tensor(0), dist_reduce_fx="mean")
+
+        # self.add_state("mae", default=torch.tensor(0), dist_reduce_fx="mean")
+        # self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
+        # self.add_state("rmse", default=torch.tensor(0), dist_reduce_fx="mean")
+        # self.add_state("r2", default=torch.tensor(0), dist_reduce_fx="mean")
 
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor):
+    def update(self, preds: torch.Tensor, targets: torch.Tensor):
         #preds, target = self._input_format(preds, target)
-        assert preds.shape == target.shape
-        self.mae = MeanAbsoluteError()
-        self.mse = MeanSquaredError()
-        self.r2 = R2Score(multioutput='uniform_average')
+        assert preds.shape == targets.shape
+
+        mae = MeanAbsoluteError()
+        mse = MeanSquaredError()
+        r2 = R2Score(multioutput='uniform_average')
+        smape = SymmetricMeanAbsolutePercentageError()
+        kld = KLDivergence()
+
+        self.mae = mae(preds,targets)
+        self.mse = mse(preds,targets)
+        self.rmse = torch.sqrt(self.mse)
+        self.r2 = r2(preds,targets)
+        self.smape = smape(preds,targets)
+        self.kld = kld(preds[None],targets[None])
 
 
     def compute(self):
-        return {'mae':self.mae(preds, targets),
-                'mse':self.mse(preds,targets),
-                'rmse':torch.sqrt(self.mse(preds,targets)),
-                'r2':self.r2(preds, targets)}
+        return {'MeanAbsoluteError':self.mae,
+                'MeanSquaredError':self.mse,
+                'RootMeanSquaredError':self.rmse,
+                'R2Score':self.r2,
+                'SMAPE' : self.smape,
+                'KLDiv':self.kld}
 
 
 if __name__ == "__main__":
@@ -61,6 +74,8 @@ if __name__ == "__main__":
     ])
     metric = CustomMetrics()
     metric(preds,targets)
-    #acc = metric_collection(preds,targets)
+    # acc = metric_collection(preds,targets)
     acc = metric.compute()
     print(acc)
+    metric.reset()
+

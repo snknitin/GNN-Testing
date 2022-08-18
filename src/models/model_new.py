@@ -32,9 +32,13 @@ class NetQtyModel(pl.LightningModule):
         self.lr = lr
 
 
-        self.metrics = {'train':metric_collection,
-                        'val':metric_collection,
-                        'test':metric_collection}
+        # self.metrics = {'train':metric_collection,
+        #                 'val':metric_collection,
+        #                 'test':metric_collection}
+
+        self.metrics = {'train': CustomMetrics(),
+                        'val': CustomMetrics(),
+                        'test': CustomMetrics()}
 
 
     def forward(self, x_dict,edge_index_dict,edge_attr_dict):
