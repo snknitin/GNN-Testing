@@ -4,14 +4,12 @@ from torch.nn import MSELoss
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.types import STEP_OUTPUT, EPOCH_OUTPUT
 import torch_geometric.transforms as T
-import transform as tnf
+from src.utils import transform as tnf
 import os
 import hydra
 import omegaconf
 import pyrootutils
-from metrics import CustomMetrics,metric_collection
-from pytorch_lightning.callbacks import Callback,EarlyStopping,ModelCheckpoint,RichProgressBar,ModelSummary
-
+from src.utils.metrics import CustomMetrics
 
 
 class NetQtyModel(pl.LightningModule):
@@ -84,6 +82,11 @@ class NetQtyModel(pl.LightningModule):
         results = {'loss': loss,'preds':preds,'targets':targets}
         return results
 
+    def on_train_start(self):
+        # by default lightning executes validation step sanity checks before training starts,
+        # so we need to make sure val_acc_best doesn't store accuracy from these checks
+        self.metrics["val"].reset()
+
     # Training
     def training_step(self, batch, batch_idx, *args, **kwargs) -> STEP_OUTPUT:
         mode = "train"
@@ -92,6 +95,11 @@ class NetQtyModel(pl.LightningModule):
 
     def validation_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
         mode = "val"
+        results = self._shared_step(batch, batch_idx, mode)
+        return results
+
+    def test_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
+        mode = "test"
         results = self._shared_step(batch, batch_idx, mode)
         return results
 
@@ -116,11 +124,10 @@ class NetQtyModel(pl.LightningModule):
                    'val_loss': avg_val_loss}
         return results
 
-    #
-    # def test_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
-    #     mode = "test"
-    #     self._shared_step(batch, batch_idx, mode)
-    #
+    def test_epoch_end(self, test_step_outputs):
+        self.metrics["test"].reset()
+
+
     #
     # def predict_step(self,batch, batch_idx, *args, **kwargs) -> Optional[STEP_OUTPUT]:
     #     preds = self(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
@@ -174,8 +181,8 @@ if __name__=="__main__":
     trainer = pl.Trainer(
                          max_steps=1000,max_epochs=25,
                          #accelerator='gpu', devices=1,
-                         log_every_n_steps=5,
-                         check_val_every_n_epoch=3,
+                         #log_every_n_steps=5,
+                         #check_val_every_n_epoch=3,
                          gradient_clip_val=1.0,
                          deterministic=True,
                          progress_bar_refresh_rate=5,

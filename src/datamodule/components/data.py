@@ -1,14 +1,15 @@
+import pyrootutils
 import torch
 import os
 import os.path as osp
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from torch_geometric.data import InMemoryDataset,Dataset, download_url
+from torch_geometric.data import InMemoryDataset,Dataset
 from torch_geometric.data import HeteroData
 import pandas as pd
 from tqdm import tqdm
-
-import transform as tnf
+from pathlib import Path
+from src.utils import transform as tnf
 import torch_geometric.transforms as T
 import random
 import shutil
@@ -281,7 +282,8 @@ class DailyData(Dataset):
 
 
 if __name__ == '__main__':
-    root = osp.join(os.getcwd(), "data/dailyroot")
+    root = pyrootutils.setup_root(__file__, pythonpath=True)
+    data = root /"data"/"dailyroot"
     proc_path = os.path.join(root, 'processed')
     if os.path.exists(proc_path):
         shutil.rmtree(os.path.join(root,'processed'))

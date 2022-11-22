@@ -2,17 +2,18 @@ from typing import Dict, List, Any, Optional, Tuple
 
 import torch
 from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
-import transform as tnf
+from src.utils import transform as tnf
 import torch_geometric.transforms as T
 from torch_geometric.loader import DataLoader
 from torch_geometric.typing import EdgeType, NodeType
 import pytorch_lightning as pl
 
-from data import DailyData
+from src.datamodule.components.data import DailyData
 import hydra
 import omegaconf
+from omegaconf import DictConfig
 import pyrootutils
-
+root = pyrootutils.setup_root(__file__, dotenv=True, pythonpath=True)
 
 class IdentityEncoder(object):
     def __init__(self, dtype=None):
@@ -104,15 +105,24 @@ class GraphDataModule(pl.LightningDataModule):
     #     return batch
 
 
+@hydra.main(version_base="1.2", config_path=root / "configs", config_name="data.yaml")
+def main(data_cfg: DictConfig) -> float:
+    cfg = data_cfg.datamodule
+    cfg["run_state"] = "CA_TX"
+    pass
+
+
+
+
 if __name__ == '__main__':
     root = pyrootutils.setup_root(__file__, pythonpath=True)
-
+    main()
     cfg = omegaconf.OmegaConf.load(root / "configs"/"datamodule"/ "dailydata.yaml")
-    # cfg.data_dir = str(root / cfg.data_dir)
-    data = hydra.utils.instantiate(cfg)
-
-
-    data.prepare_data()
-    data.setup()
-    print(data.metadata)
-    print(next(iter(data.train_dataloader())))
+    ## cfg.data_dir = str(root / cfg.data_dir)
+    #data = hydra.utils.instantiate(cfg)
+    #
+    #
+    # data.prepare_data()
+    # data.setup()
+    # print(data.metadata)
+    # print(next(iter(data.train_dataloader())))

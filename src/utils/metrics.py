@@ -52,7 +52,7 @@ class CustomMetrics(Metric):
         self.rmse = torch.sqrt(self.mse)
         self.r2 = r2(preds,targets)
         self.smape = smape(preds,targets)
-        self.kld = kld(preds[None],targets[None])
+        self.kld = kld(preds[:,None],targets[:,None])
 
 
     def compute(self):
